@@ -160,50 +160,69 @@ class SparseGaussianProcessRegressor:
 
         return self.history
 
-    def predict(self, data_loader, return_std=True, return_targets=True):
+    def predict(self, data_loader, original_scale=True):
         if self.model is None or self.likelihood is None:
-            raise RuntimeError("You must fit the model before prediction.")
+          raise RuntimeError("You must fit the model before evaluation.")
 
         self.model.eval()
         self.likelihood.eval()
 
-        means = []
-        variances = []
+        predictions = []
         targets = []
+
+        total_nll = 0.0
+        total_points = 0
 
         with torch.no_grad(), gpytorch.settings.fast_pred_var():
             for x_batch, y_batch in data_loader:
                 x_batch = x_batch.float().to(self.device)
+                y_batch = y_batch.float().to(self.device)
+
+                if y_batch.ndim > 1:
+                    y_batch = y_batch.squeeze(-1)
 
                 pred_dist = self.likelihood(self.model(x_batch))
 
-                means.append(pred_dist.mean.cpu())
-                variances.append(pred_dist.variance.cpu())
+                mean_scaled = pred_dist.mean
+                var_scaled = pred_dist.variance
+                std_scaled = torch.sqrt(var_scaled.clamp_min(1e-9))
 
-                if return_targets:
+                normal_scaled = torch.distributions.Normal(
+                    mean_scaled,
+                    std_scaled
+                )
+
+                prob_scaled = normal_scaled.log_prob(y_batch)
+
+                if original_scale and self.y_mu is not None and self.y_sigma is not None:
+                    y_mu = self.y_mu.to(self.device).squeeze()
+                    y_sigma = self.y_sigma.to(self.device).squeeze()
+
+                    y_true = y_batch * y_sigma + y_mu
+                    y_pred_mean = mean_scaled * y_sigma + y_mu
+                    y_pred_var = var_scaled * y_sigma**2
+
+
+                    prob_original = prob_scaled
+
+                    batch_nll = -prob_original.sum()
+
+                    predictions.append(y_pred_mean.cpu())
+                    targets.append(y_true.cpu())
+
+                else:
+                    batch_nll = -prob_scaled.sum()
+
+                    predictions.append(mean_scaled.cpu())
                     targets.append(y_batch.cpu())
 
-        mean = torch.cat(means, dim=0)
-        variance = torch.cat(variances, dim=0)
+                total_nll += batch_nll.item()
+                total_points += y_batch.size(0)
 
-        if return_std:
-            std = torch.sqrt(variance)
+        mean = torch.cat(y_pred_mean, dim=0).numpy()
+        var = torch.cat(y_pred_var, dim=0).numpy()
 
-        if return_targets:
-            y_true = torch.cat(targets, dim=0)
-
-            if y_true.ndim > 1:
-                y_true = y_true.squeeze(-1)
-
-            if return_std:
-                return mean, std, y_true
-
-            return mean, y_true
-
-        if return_std:
-            return mean, std
-
-        return mean
+        return mean, var
 
     def evaluate(self, data_loader, original_scale=True):
       if self.model is None or self.likelihood is None:
