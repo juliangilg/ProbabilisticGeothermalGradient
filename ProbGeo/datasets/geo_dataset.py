@@ -25,7 +25,7 @@ class ColombianGeothermalGradient(Dataset):
 
     def __init__(
         self,
-        data_dir=None
+        data_dir=None,
         target_col=None,
         feature_cols=None,
         coordinates_transform=None,
