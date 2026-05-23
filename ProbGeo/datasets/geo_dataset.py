@@ -9,9 +9,6 @@ class ColombianGeothermalGradient(Dataset):
     """
     Dataset for geothermal gradient estimation in Colombia.
 
-    The dataset is expected to be hosted in:
-    /content/drive/MyDrive/Posdoctorado/Geotermia/Datos/data_weights.csv
-
     Parameters
     ----------
     data_dir : str
@@ -28,8 +25,8 @@ class ColombianGeothermalGradient(Dataset):
 
     def __init__(
         self,
-        data_dir="/content/drive/MyDrive/Posdoctorado/Geotermia/Datos/data_weights.csv",
-        target_col="Apparent Geothermal Gradient (°C/Km)",
+        data_dir=None
+        target_col=None,
         feature_cols=None,
         coordinates_transform=None,
         scaley = False
