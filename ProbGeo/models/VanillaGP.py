@@ -219,10 +219,7 @@ class SparseGaussianProcessRegressor:
                 total_nll += batch_nll.item()
                 total_points += y_batch.size(0)
 
-        mean = torch.cat(y_pred_mean, dim=0).numpy()
-        var = torch.cat(y_pred_var, dim=0).numpy()
-
-        return mean, var
+        return y_pred_mean, y_pred_var
 
     def evaluate(self, data_loader, original_scale=True):
       if self.model is None or self.likelihood is None:
