@@ -102,7 +102,7 @@ class SparseGaussianProcessRegressor:
 
         self.model = VariationalGPModel(inducing_points).to(self.device)
 
-        if self.likelihood_name == "Gaussian"
+        if self.likelihood_name == "Gaussian":
             self.likelihood = gpytorch.likelihoods.GaussianLikelihood().to(self.device)
         else: 
             self.likelihood = gpytorch.likelihoods.student_t_likelihood().to(self.device)
