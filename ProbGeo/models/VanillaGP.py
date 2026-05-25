@@ -105,7 +105,7 @@ class SparseGaussianProcessRegressor:
         if self.likelihood_name == "Gaussian":
             self.likelihood = gpytorch.likelihoods.GaussianLikelihood().to(self.device)
         else: 
-            self.likelihood = gpytorch.likelihoods.student_t_likelihood().to(self.device)
+            self.likelihood = gpytorch.likelihoods.StudentTLikelihood().to(self.device)
 
     def fit(self, train_loader, verbose=True):
         num_data = self._count_num_data(train_loader)
