@@ -52,6 +52,7 @@ class SparseGaussianProcessRegressor:
         num_inducing=500,
         lr=1e-2,
         num_epochs=100,
+        likelihood = "Gaussian"
         device=None,
         y_mu=None,
         y_sigma=None
@@ -65,6 +66,7 @@ class SparseGaussianProcessRegressor:
         )
 
         self.model = None
+        self.likelihood_name = likelihood 
         self.likelihood = None
         self.y_mu = y_mu
         self.y_sigma = y_sigma
@@ -100,7 +102,10 @@ class SparseGaussianProcessRegressor:
 
         self.model = VariationalGPModel(inducing_points).to(self.device)
 
-        self.likelihood = gpytorch.likelihoods.GaussianLikelihood().to(self.device)
+        if self.likelihood_name == "Gaussian"
+            self.likelihood = gpytorch.likelihoods.GaussianLikelihood().to(self.device)
+        else: 
+            self.likelihood = gpytorch.likelihoods.student_t_likelihood().to(self.device)
 
     def fit(self, train_loader, verbose=True):
         num_data = self._count_num_data(train_loader)
