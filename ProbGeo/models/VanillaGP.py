@@ -172,8 +172,8 @@ class SparseGaussianProcessRegressor:
         self.model.eval()
         self.likelihood.eval()
 
-        predictions = []
-        targets = []
+        mean = []
+        var = []
 
         total_nll = 0.0
         total_points = 0
@@ -192,39 +192,32 @@ class SparseGaussianProcessRegressor:
                 var_scaled = pred_dist.variance
                 std_scaled = torch.sqrt(var_scaled.clamp_min(1e-9))
 
-                normal_scaled = torch.distributions.Normal(
-                    mean_scaled,
-                    std_scaled
-                )
-
-                prob_scaled = normal_scaled.log_prob(y_batch)
 
                 if original_scale and self.y_mu is not None and self.y_sigma is not None:
                     y_mu = self.y_mu.to(self.device).squeeze()
                     y_sigma = self.y_sigma.to(self.device).squeeze()
 
-                    y_true = y_batch * y_sigma + y_mu
-                    y_pred_mean = mean_scaled * y_sigma + y_mu
-                    y_pred_var = var_scaled * y_sigma**2
+                    y_true_log = y_batch * y_sigma + y_mu
+                    y_pred_log_mean = mean_scaled * y_sigma + y_mu
+                    y_pred_log_var = var_scaled * y_sigma**2
+                else: 
+                    y_true_log = y_batch
+                    y_pred_log_mean = mean_scaled 
+                    y_pred_log_var = var_scaled 
+                    
+
+                y_true = torch.exp(y_true_log)
+                y_pred_mean = torch.exp(y_pred_log_mean + 0.5*y_pred_log_var)
+                y_pred_var = (torch.exp(y_pred_log_var) - 1)*torch.exp(2*y_pred_log_mean + y_pred_log_var) 
 
 
-                    prob_original = prob_scaled
+                mean.append(y_pred_mean.cpu())
+                var.append(y_pred_var.cpu())
 
-                    batch_nll = -prob_original.sum()
+        mean = torch.cat(mean, dim=0).numpy()
+        var = torch.cat(var, dim=0).numpy()
 
-                    predictions.append(y_pred_mean.cpu())
-                    targets.append(y_true.cpu())
-
-                else:
-                    batch_nll = -prob_scaled.sum()
-
-                    predictions.append(mean_scaled.cpu())
-                    targets.append(y_batch.cpu())
-
-                total_nll += batch_nll.item()
-                total_points += y_batch.size(0)
-
-        return y_pred_mean, y_pred_var
+        return mean, var
 
     def evaluate(self, data_loader, original_scale=True):
       if self.model is None or self.likelihood is None:
@@ -261,29 +254,37 @@ class SparseGaussianProcessRegressor:
               log_prob_scaled = normal_scaled.log_prob(y_batch)
 
               if original_scale and self.y_mu is not None and self.y_sigma is not None:
-                  y_mu = self.y_mu.to(self.device).squeeze()
-                  y_sigma = self.y_sigma.to(self.device).squeeze()
+                y_mu = self.y_mu.to(self.device).squeeze()
+                y_sigma = self.y_sigma.to(self.device).squeeze()
 
-                  y_true_log = y_batch * y_sigma + y_mu
-                  y_pred_log_mean = mean_scaled * y_sigma + y_mu
-                  y_pred_log_var = var_scaled * y_sigma**2
+                y_true_log = y_batch * y_sigma + y_mu
+                y_pred_log_mean = mean_scaled * y_sigma + y_mu
+                y_pred_log_var = var_scaled * y_sigma**2
+            else: 
+                y_true_log = y_batch
+                y_pred_log_mean = mean_scaled 
+                y_pred_log_var = var_scaled 
+
+            y_true = torch.exp(y_true_log)
+            y_pred_mean = torch.exp(y_pred_log_mean + 0.5*y_pred_log_var)
+            y_pred_var = (torch.exp(y_pred_log_var) - 1)*torch.exp(2*y_pred_log_mean + y_pred_log_var) 
+
+            nll_log = (
+                0.5 * torch.log(2.0 * torch.pi * var_log)
+                + 0.5 * ((y_true_log - mean_log) ** 2) / var_log
+            )
+
+            batch_nll = nll_log + torch.log(y_true.clamp_min(eps))
+
+            predictions.append(y_pred_mean.detach().cpu())
+            targets.append(y_true.detach().cpu())
+
+            total_nll += batch_nll.sum().item()
+            total_points += y_batch.numel()
 
 
-                  log_prob_original = log_prob_scaled
 
-                  batch_nll = -log_prob_original.sum()
-
-                  predictions.append(y_pred_log_mean.cpu())
-                  targets.append(y_true_log.cpu())
-
-              else:
-                  batch_nll = -log_prob_scaled.sum()
-
-                  predictions.append(mean_scaled.cpu())
-                  targets.append(y_batch.cpu())
-
-              total_nll += batch_nll.item()
-              total_points += y_batch.size(0)
+            
 
       y_pred = torch.cat(predictions, dim=0).numpy()
       y_true = torch.cat(targets, dim=0).numpy()
