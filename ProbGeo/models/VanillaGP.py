@@ -52,7 +52,7 @@ class SparseGaussianProcessRegressor:
         num_inducing=500,
         lr=1e-2,
         num_epochs=100,
-        likelihood = "Gaussian"
+        likelihood = "Gaussian",
         device=None,
         y_mu=None,
         y_sigma=None
